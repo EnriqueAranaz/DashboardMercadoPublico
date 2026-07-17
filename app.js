@@ -60,13 +60,29 @@ function formatearFecha(valor) {
   return d.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+const MESES_ABREV = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
 // FechaConsulta viene como "ddmmaaaa" (ej. "13072026"), no es un formato
 // que Date() entienda solo — la parseamos a mano.
-function formatearFechaDDMMAAAA(valor) {
+function parsearDDMMAAAA(valor) {
   const s = String(valor || "").trim();
   const m = s.match(/^(\d{2})(\d{2})(\d{4})$/);
-  if (!m) return formatearFecha(valor);
-  return m[1] + "-" + m[2] + "-" + m[3];
+  if (!m) return null;
+  return { dia: m[1], mes: parseInt(m[2], 10), anio: m[3] };
+}
+
+// Formato compacto para las tarjetas de resumen por día: "13-Jul"
+function formatearFechaCortaDDMMAAAA(valor) {
+  const p = parsearDDMMAAAA(valor);
+  if (!p) return formatearFecha(valor);
+  return p.dia + "-" + MESES_ABREV[p.mes];
+}
+
+// Formato para cada línea de proyecto: "13-Jul-26"
+function formatearFechaDDMMAAAA(valor) {
+  const p = parsearDDMMAAAA(valor);
+  if (!p) return formatearFecha(valor);
+  return p.dia + "-" + MESES_ABREV[p.mes] + "-" + p.anio.slice(-2);
 }
 
 function claseEstado(estado) {
@@ -77,6 +93,17 @@ function claseEstado(estado) {
   if (e.includes("revocad")) return "estado-badge--revocada";
   if (e.includes("desiert")) return "estado-badge--desierta";
   return "estado-badge--otro";
+}
+
+// Misma paleta que claseEstado, pero como variante de chip (para los filtros de Estado)
+function claseChipEstado(estado) {
+  const e = normalizarTexto(estado);
+  if (e.includes("public")) return "chip--publicada";
+  if (e.includes("cerrad")) return "chip--cerrada";
+  if (e.includes("adjudic")) return "chip--adjudicada";
+  if (e.includes("revocad")) return "chip--revocada";
+  if (e.includes("desiert")) return "chip--desierta";
+  return "chip--otro";
 }
 
 function palabrasClaveDe(fila) {
@@ -160,7 +187,7 @@ function renderStatsPorDia() {
   const cont = document.getElementById("statsPorDia");
   const porDia = {};
   state.todos.forEach((fila) => {
-    const fecha = formatearFechaDDMMAAAA(fila.FechaConsulta) || formatearFecha(fila.FechaPublicacion);
+    const fecha = formatearFechaCortaDDMMAAAA(fila.FechaConsulta) || formatearFecha(fila.FechaPublicacion);
     porDia[fecha] = (porDia[fecha] || 0) + 1;
   });
 
@@ -185,10 +212,16 @@ function renderChipsEstadoTodos() {
   }
   wrap.classList.remove("hidden");
 
-  renderChips("chipsEstadoTodos", estados, state.estadosTodosSeleccionados, (valor) => {
-    toggleSetValor(state.estadosTodosSeleccionados, valor);
-    renderListaTodos();
-  });
+  renderChips(
+    "chipsEstadoTodos",
+    estados,
+    state.estadosTodosSeleccionados,
+    (valor) => {
+      toggleSetValor(state.estadosTodosSeleccionados, valor);
+      renderListaTodos();
+    },
+    claseChipEstado
+  );
 }
 
 function renderListaTodos() {
@@ -246,10 +279,16 @@ function inicializarFiltros() {
   });
 
   const estados = Array.from(new Set(state.filtrados.map((f) => f.Estado).filter(Boolean))).sort();
-  renderChips("chipsEstado", estados, state.filtros.estados, (valor) => {
-    toggleSetValor(state.filtros.estados, valor);
-    aplicarFiltrosYRenderizar();
-  });
+  renderChips(
+    "chipsEstado",
+    estados,
+    state.filtros.estados,
+    (valor) => {
+      toggleSetValor(state.filtros.estados, valor);
+      aplicarFiltrosYRenderizar();
+    },
+    claseChipEstado
+  );
 
   document.getElementById("montoMin").addEventListener("input", (e) => {
     state.filtros.montoMin = e.target.value ? Number(e.target.value) : null;
@@ -283,12 +322,13 @@ function toggleSetValor(set, valor) {
   else set.add(valor);
 }
 
-function renderChips(contenedorId, valores, seleccionados, onClick) {
+function renderChips(contenedorId, valores, seleccionados, onClick, claseFn) {
   const cont = document.getElementById(contenedorId);
   cont.innerHTML = valores
     .map((v) => {
       const activo = seleccionados.has(v) ? " is-active" : "";
-      return '<span class="chip' + activo + '" data-valor="' + escapeHtml(v) + '">' + escapeHtml(v) + "</span>";
+      const colorClase = claseFn ? " " + claseFn(v) : "";
+      return '<span class="chip' + colorClase + activo + '" data-valor="' + escapeHtml(v) + '">' + escapeHtml(v) + "</span>";
     })
     .join("");
 
@@ -331,54 +371,26 @@ function aplicarFiltrosYRenderizar() {
   renderListaFiltrados(resultados);
 }
 
-function contarPor(filas, campo) {
-  const conteo = {};
-  filas.forEach((f) => {
-    const valor = f[campo] || "Sin dato";
-    conteo[valor] = (conteo[valor] || 0) + 1;
-  });
-  return Object.entries(conteo).sort((a, b) => b[1] - a[1]);
-}
-
-function tarjetaDesglose(titulo, filas, campo) {
-  const conteo = contarPor(filas, campo);
-  const max = conteo.length ? conteo[0][1] : 1;
-  const filasHtml = conteo
-    .slice(0, 6)
-    .map(
-      ([label, count]) =>
-        '<div class="bar-row">' +
-        '<div class="bar-row__label">' + escapeHtml(label) + '</div>' +
-        '<div class="bar-row__track"><div class="bar-row__fill" style="width:' +
-        Math.round((count / max) * 100) +
-        '%"></div></div>' +
-        '<div class="bar-row__count">' + count + '</div>' +
-        "</div>"
-    )
-    .join("");
-
-  return (
-    '<div class="agg-card agg-card--breakdown"><div class="agg-card__label">' +
-    escapeHtml(titulo) +
-    "</div>" +
-    filasHtml +
-    "</div>"
-  );
-}
-
 function renderAggStats(filas) {
   const cont = document.getElementById("aggStats");
-  const montoTotal = filas.reduce((acc, f) => {
+
+  const conMonto = filas.filter((f) => {
     const m = Number(f.MontoEstimado);
-    return acc + (isNaN(m) ? 0 : m);
-  }, 0);
+    return f.MontoEstimado && !isNaN(m) && m > 0;
+  });
+  const sinMonto = filas.length - conMonto.length;
+  const montoTotal = conMonto.reduce((acc, f) => acc + Number(f.MontoEstimado), 0);
 
-  let html =
-    '<div class="agg-card"><div class="agg-card__value">' + filas.length + '</div><div class="agg-card__label">Proyectos filtrados</div></div>' +
-    '<div class="agg-card"><div class="agg-card__value">' + formatearMonto(montoTotal) + '</div><div class="agg-card__label">Monto total estimado</div></div>';
+  const html =
+    '<div class="stat-card stat-card--total"><div class="stat-card__value">' + filas.length +
+    '</div><div class="stat-card__label">Proyectos totales</div></div>' +
 
-  html += tarjetaDesglose("Por región", filas, "Region");
-  html += tarjetaDesglose("Por estado", filas, "Estado");
+    '<div class="stat-card"><div class="stat-card__value">' + conMonto.length +
+    '</div><div class="stat-card__label">Con monto informado</div>' +
+    '<div class="stat-card__sub">' + formatearMonto(montoTotal) + '</div></div>' +
+
+    '<div class="stat-card"><div class="stat-card__value">' + sinMonto +
+    '</div><div class="stat-card__label">Sin monto informado</div></div>';
 
   cont.innerHTML = html;
 }
