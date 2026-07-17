@@ -178,10 +178,14 @@ function renderListaTodos() {
   cont.innerHTML = filas
     .map((f) => {
       const fecha = formatearFecha(f.FechaConsulta || f.FechaPublicacion);
+      const estadoHtml = f.Estado
+        ? '<span class="estado-badge ' + claseEstado(f.Estado) + '">' + escapeHtml(f.Estado) + '</span>'
+        : "";
       return (
         '<div class="list-item">' +
         '<div class="list-item__nombre">' + escapeHtml(f.Nombre) + '</div>' +
         '<div class="list-item__meta">' +
+        estadoHtml +
         '<span class="day-badge">' + escapeHtml(fecha) + '</span>' +
         '<span class="list-item__fecha">Cierre: ' + formatearFecha(f.FechaCierre) + '</span>' +
         '</div>' +
