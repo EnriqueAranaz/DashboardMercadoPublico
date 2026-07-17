@@ -166,6 +166,10 @@ body {
   margin-top: 2px;
 }
 
+#chipsEstadoTodosWrap {
+  margin-bottom: 14px;
+}
+
 /* ---------- Search ---------- */
 .search-input {
   width: 100%;

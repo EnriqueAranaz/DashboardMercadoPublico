@@ -11,6 +11,7 @@ const KEYWORDS_DASHBOARD = ["jardin", "jardines", "area verde", "areas verdes", 
 const state = {
   todos: [],        // filas del excel "todos los proyectos"
   filtrados: [],     // filas del excel "proyectos filtrados"
+  estadosTodosSeleccionados: new Set(),   // filtro de estado, panel izquierdo
   filtros: {
     palabrasClave: new Set(),   // seleccionadas = activas (vacio al iniciar = todas)
     regiones: new Set(),
@@ -57,6 +58,15 @@ function formatearFecha(valor) {
   const d = new Date(valor);
   if (isNaN(d.getTime())) return String(valor);
   return d.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+// FechaConsulta viene como "ddmmaaaa" (ej. "13072026"), no es un formato
+// que Date() entienda solo — la parseamos a mano.
+function formatearFechaDDMMAAAA(valor) {
+  const s = String(valor || "").trim();
+  const m = s.match(/^(\d{2})(\d{2})(\d{4})$/);
+  if (!m) return formatearFecha(valor);
+  return m[1] + "-" + m[2] + "-" + m[3];
 }
 
 function claseEstado(estado) {
@@ -111,6 +121,7 @@ function cargarPanelTodos() {
       document.getElementById("todosVacio").classList.add("hidden");
       document.getElementById("todosContenido").classList.remove("hidden");
       renderStatsPorDia();
+      renderChipsEstadoTodos();
       renderListaTodos();
       document.getElementById("buscarTodos").addEventListener("input", renderListaTodos);
     },
@@ -149,7 +160,7 @@ function renderStatsPorDia() {
   const cont = document.getElementById("statsPorDia");
   const porDia = {};
   state.todos.forEach((fila) => {
-    const fecha = formatearFecha(fila.FechaConsulta || fila.FechaPublicacion);
+    const fecha = formatearFechaDDMMAAAA(fila.FechaConsulta) || formatearFecha(fila.FechaPublicacion);
     porDia[fecha] = (porDia[fecha] || 0) + 1;
   });
 
@@ -164,20 +175,40 @@ function renderStatsPorDia() {
   cont.innerHTML = html;
 }
 
+function renderChipsEstadoTodos() {
+  const wrap = document.getElementById("chipsEstadoTodosWrap");
+  const estados = Array.from(new Set(state.todos.map((f) => f.Estado).filter(Boolean))).sort();
+
+  if (!estados.length) {
+    wrap.classList.add("hidden");
+    return;
+  }
+  wrap.classList.remove("hidden");
+
+  renderChips("chipsEstadoTodos", estados, state.estadosTodosSeleccionados, (valor) => {
+    toggleSetValor(state.estadosTodosSeleccionados, valor);
+    renderListaTodos();
+  });
+}
+
 function renderListaTodos() {
   const cont = document.getElementById("listaTodos");
   const busqueda = normalizarTexto(document.getElementById("buscarTodos").value);
 
-  const filas = state.todos.filter((f) => !busqueda || normalizarTexto(f.Nombre).includes(busqueda));
+  const filas = state.todos.filter((f) => {
+    if (busqueda && !normalizarTexto(f.Nombre).includes(busqueda)) return false;
+    if (state.estadosTodosSeleccionados.size > 0 && !state.estadosTodosSeleccionados.has(f.Estado)) return false;
+    return true;
+  });
 
   if (!filas.length) {
-    cont.innerHTML = '<div class="list-empty">No hay proyectos que coincidan con la búsqueda.</div>';
+    cont.innerHTML = '<div class="list-empty">No hay proyectos que coincidan con la búsqueda o los filtros.</div>';
     return;
   }
 
   cont.innerHTML = filas
     .map((f) => {
-      const fecha = formatearFecha(f.FechaConsulta || f.FechaPublicacion);
+      const fecha = formatearFechaDDMMAAAA(f.FechaConsulta) || formatearFecha(f.FechaPublicacion);
       const estadoHtml = f.Estado
         ? '<span class="estado-badge ' + claseEstado(f.Estado) + '">' + escapeHtml(f.Estado) + '</span>'
         : "";
