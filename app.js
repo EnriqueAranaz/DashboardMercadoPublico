@@ -147,10 +147,13 @@ function cargarPanelTodos() {
       state.todos = filas;
       document.getElementById("todosVacio").classList.add("hidden");
       document.getElementById("todosContenido").classList.remove("hidden");
-      renderStatsPorDia();
       renderChipsEstadoTodos();
+      renderStatsPorDia();
       renderListaTodos();
-      document.getElementById("buscarTodos").addEventListener("input", renderListaTodos);
+      document.getElementById("buscarTodos").addEventListener("input", () => {
+        renderStatsPorDia();
+        renderListaTodos();
+      });
     },
     () => {
       document.getElementById("todosVacio").innerHTML =
@@ -183,16 +186,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
 /* ---------- Panel izquierdo: todos los proyectos ---------- */
 
+function filasTodosFiltradas() {
+  const busqueda = normalizarTexto(document.getElementById("buscarTodos").value);
+  return state.todos.filter((f) => {
+    if (busqueda && !normalizarTexto(f.Nombre).includes(busqueda)) return false;
+    if (!state.estadosTodosSeleccionados.has(f.Estado)) return false;
+    return true;
+  });
+}
+
 function renderStatsPorDia() {
   const cont = document.getElementById("statsPorDia");
+  const filas = filasTodosFiltradas();
   const porDia = {};
-  state.todos.forEach((fila) => {
+  filas.forEach((fila) => {
     const fecha = formatearFechaCortaDDMMAAAA(fila.FechaConsulta) || formatearFecha(fila.FechaPublicacion);
     porDia[fecha] = (porDia[fecha] || 0) + 1;
   });
 
   let html = '<div class="stat-card stat-card--total"><div class="stat-card__value">' +
-    state.todos.length + '</div><div class="stat-card__label">Total 5 días</div></div>';
+    filas.length + '</div><div class="stat-card__label">Total 5 días</div></div>';
 
   Object.keys(porDia).forEach((fecha) => {
     html += '<div class="stat-card"><div class="stat-card__value">' + porDia[fecha] +
@@ -212,12 +225,18 @@ function renderChipsEstadoTodos() {
   }
   wrap.classList.remove("hidden");
 
+  // Por defecto, todos los estados quedan marcados (= se listan todos los proyectos)
+  if (state.estadosTodosSeleccionados.size === 0) {
+    estados.forEach((e) => state.estadosTodosSeleccionados.add(e));
+  }
+
   renderChips(
     "chipsEstadoTodos",
     estados,
     state.estadosTodosSeleccionados,
     (valor) => {
       toggleSetValor(state.estadosTodosSeleccionados, valor);
+      renderStatsPorDia();
       renderListaTodos();
     },
     claseChipEstado
@@ -226,13 +245,7 @@ function renderChipsEstadoTodos() {
 
 function renderListaTodos() {
   const cont = document.getElementById("listaTodos");
-  const busqueda = normalizarTexto(document.getElementById("buscarTodos").value);
-
-  const filas = state.todos.filter((f) => {
-    if (busqueda && !normalizarTexto(f.Nombre).includes(busqueda)) return false;
-    if (state.estadosTodosSeleccionados.size > 0 && !state.estadosTodosSeleccionados.has(f.Estado)) return false;
-    return true;
-  });
+  const filas = filasTodosFiltradas();
 
   if (!filas.length) {
     cont.innerHTML = '<div class="list-empty">No hay proyectos que coincidan con la búsqueda o los filtros.</div>';

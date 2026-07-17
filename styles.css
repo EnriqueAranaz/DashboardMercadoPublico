@@ -335,6 +335,22 @@ body {
 
 .filter-group:last-of-type { margin-bottom: 0; }
 
+.filter-row {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 14px;
+}
+
+.filter-row .filter-group--inline {
+  flex: 1 1 0;
+  margin-bottom: 0;
+  min-width: 160px;
+}
+
+@media (max-width: 640px) {
+  .filter-row { flex-direction: column; gap: 14px; }
+}
+
 .filter-group__label {
   display: block;
   font-size: 11px;
