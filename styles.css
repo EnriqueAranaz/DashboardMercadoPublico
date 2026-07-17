@@ -177,6 +177,17 @@ body {
   margin-bottom: 14px;
 }
 
+.stats-row--filtrados {
+  margin-bottom: 20px;
+}
+
+.stats-row--filtrados .stat-card {
+  min-height: 58px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
 /* ---------- Search ---------- */
 .search-input {
   width: 100%;
