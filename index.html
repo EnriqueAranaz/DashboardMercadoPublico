@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>SocIA Tech · Cuadro de mando de licitaciones</title>
 <link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="ficha.css" />
 </head>
 <body>
 
@@ -37,11 +38,6 @@
       <div id="todosContenido" class="hidden">
         <div class="stats-row" id="statsPorDia"></div>
 
-        <div class="filter-group" id="chipsEstadoTodosWrap">
-          <span class="filter-group__label">Estado</span>
-          <div class="chips" id="chipsEstadoTodos"></div>
-        </div>
-
         <input type="search" id="buscarTodos" class="search-input" placeholder="Buscar por nombre..." />
 
         <div class="list-scroll" id="listaTodos"></div>
@@ -63,23 +59,24 @@
 
       <div id="filtradosContenido" class="hidden">
 
+        <!-- Estadisticas agregadas -->
+        <div class="agg-stats" id="aggStats"></div>
+
         <!-- Filtros -->
         <div class="filters">
-          <div class="filter-row">
-            <div class="filter-group filter-group--inline">
-              <span class="filter-group__label">Palabras clave</span>
-              <div class="chips" id="chipsPalabraClave"></div>
-            </div>
-
-            <div class="filter-group filter-group--inline">
-              <span class="filter-group__label">Estado</span>
-              <div class="chips" id="chipsEstado"></div>
-            </div>
+          <div class="filter-group">
+            <span class="filter-group__label">Palabra clave</span>
+            <div class="chips" id="chipsPalabraClave"></div>
           </div>
 
           <div class="filter-group">
             <span class="filter-group__label">Región</span>
             <div class="chips" id="chipsRegion"></div>
+          </div>
+
+          <div class="filter-group">
+            <span class="filter-group__label">Estado</span>
+            <div class="chips" id="chipsEstado"></div>
           </div>
 
           <div class="filter-group filter-group--monto">
@@ -98,10 +95,7 @@
           <button class="filters__reset" id="resetFiltros" type="button">Limpiar filtros</button>
         </div>
 
-        <!-- Estadisticas agregadas -->
-        <div class="stats-row stats-row--filtrados" id="aggStats"></div>
-
-        <p class="results-note">Clic en un proyecto para ver el detalle — próximamente en el prototipo.</p>
+        <p class="results-note">Clic en un proyecto para ver la ficha completa.</p>
 
         <div class="results-list" id="listaFiltrados"></div>
       </div>
@@ -113,7 +107,11 @@
     <p>SocIA Tech — Gestión Ágil e Inteligente. Prototipo interno, datos desde Mercado Público (ChileCompra).</p>
   </footer>
 
+  <!-- ============ MODULO FICHA: contenedor donde ficha.js inyecta ficha.html ============ -->
+  <div id="fichaRoot"></div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="ficha.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

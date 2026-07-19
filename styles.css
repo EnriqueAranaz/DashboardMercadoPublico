@@ -166,28 +166,6 @@ body {
   margin-top: 2px;
 }
 
-.stat-card__sub {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--green-dark);
-  margin-top: 3px;
-}
-
-#chipsEstadoTodosWrap {
-  margin-bottom: 14px;
-}
-
-.stats-row--filtrados {
-  margin-bottom: 20px;
-}
-
-.stats-row--filtrados .stat-card {
-  min-height: 58px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
 /* ---------- Search ---------- */
 .search-input {
   width: 100%;
@@ -335,22 +313,6 @@ body {
 
 .filter-group:last-of-type { margin-bottom: 0; }
 
-.filter-row {
-  display: flex;
-  gap: 24px;
-  margin-bottom: 14px;
-}
-
-.filter-row .filter-group--inline {
-  flex: 1 1 0;
-  margin-bottom: 0;
-  min-width: 160px;
-}
-
-@media (max-width: 640px) {
-  .filter-row { flex-direction: column; gap: 14px; }
-}
-
 .filter-group__label {
   display: block;
   font-size: 11px;
@@ -385,24 +347,6 @@ body {
   background: var(--green);
   border-color: var(--green);
   color: var(--white);
-}
-
-/* Chips de Estado: mismos colores que los badges de estado */
-.chip--publicada { background: #E4F3E8; color: var(--green-dark); border-color: #c9e5d2; }
-.chip--cerrada { background: #F1EFE6; color: #8A6D1E; border-color: #e6dfc7; }
-.chip--adjudicada { background: #E4EEFB; color: #2A5AA0; border-color: #cfe0f7; }
-.chip--revocada,
-.chip--desierta { background: #FBE7E4; color: #B3402F; border-color: #f6d5cf; }
-.chip--otro { background: var(--green-light); color: var(--muted); }
-
-.chip--publicada.is-active,
-.chip--cerrada.is-active,
-.chip--adjudicada.is-active,
-.chip--revocada.is-active,
-.chip--desierta.is-active,
-.chip--otro.is-active {
-  outline: 2px solid currentColor;
-  outline-offset: -1px;
 }
 
 .monto-inputs {
@@ -468,12 +412,18 @@ body {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 12px 14px;
+  cursor: pointer;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
 .result-card:hover {
   border-color: var(--green);
   box-shadow: var(--shadow);
+}
+
+.result-card:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
 }
 
 .result-card__top {
@@ -542,3 +492,6 @@ body {
   font-size: 11.5px;
   color: var(--muted);
 }
+
+/* Nota: los estilos del modal de ficha de detalle viven en ficha.css
+   (modulo independiente), no en este archivo. */

@@ -4,6 +4,10 @@
    Lee dos Excel (SheetJS) exportados desde el notebook de Python:
      - licitaciones_todas_5dias.xlsx  -> panel izquierdo
      - licitaciones_dashboard.xlsx    -> panel derecho (filtrado + ficha)
+
+   La ficha de detalle (modal al hacer clic en una tarjeta) vive en su
+   propio modulo: ficha.html / ficha.css / ficha.js. Este archivo solo
+   llama a `Ficha.abrir(fila)`, no conoce como se pinta la ficha.
    ============================================================ */
 
 const KEYWORDS_DASHBOARD = ["jardin", "jardines", "area verde", "areas verdes", "paisajismo"];
@@ -11,7 +15,6 @@ const KEYWORDS_DASHBOARD = ["jardin", "jardines", "area verde", "areas verdes", 
 const state = {
   todos: [],        // filas del excel "todos los proyectos"
   filtrados: [],     // filas del excel "proyectos filtrados"
-  estadosTodosSeleccionados: new Set(),   // filtro de estado, panel izquierdo
   filtros: {
     palabrasClave: new Set(),   // seleccionadas = activas (vacio al iniciar = todas)
     regiones: new Set(),
@@ -60,31 +63,6 @@ function formatearFecha(valor) {
   return d.toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-const MESES_ABREV = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-
-// FechaConsulta viene como "ddmmaaaa" (ej. "13072026"), no es un formato
-// que Date() entienda solo — la parseamos a mano.
-function parsearDDMMAAAA(valor) {
-  const s = String(valor || "").trim();
-  const m = s.match(/^(\d{2})(\d{2})(\d{4})$/);
-  if (!m) return null;
-  return { dia: m[1], mes: parseInt(m[2], 10), anio: m[3] };
-}
-
-// Formato compacto para las tarjetas de resumen por día: "13-Jul"
-function formatearFechaCortaDDMMAAAA(valor) {
-  const p = parsearDDMMAAAA(valor);
-  if (!p) return formatearFecha(valor);
-  return p.dia + "-" + MESES_ABREV[p.mes];
-}
-
-// Formato para cada línea de proyecto: "13-Jul-26"
-function formatearFechaDDMMAAAA(valor) {
-  const p = parsearDDMMAAAA(valor);
-  if (!p) return formatearFecha(valor);
-  return p.dia + "-" + MESES_ABREV[p.mes] + "-" + p.anio.slice(-2);
-}
-
 function claseEstado(estado) {
   const e = normalizarTexto(estado);
   if (e.includes("public")) return "estado-badge--publicada";
@@ -93,22 +71,6 @@ function claseEstado(estado) {
   if (e.includes("revocad")) return "estado-badge--revocada";
   if (e.includes("desiert")) return "estado-badge--desierta";
   return "estado-badge--otro";
-}
-
-// Misma paleta que claseEstado, pero como variante de chip (para los filtros de Estado)
-function claseChipEstado(estado) {
-  const e = normalizarTexto(estado);
-  if (e.includes("public")) return "chip--publicada";
-  if (e.includes("cerrad")) return "chip--cerrada";
-  if (e.includes("adjudic")) return "chip--adjudicada";
-  if (e.includes("revocad")) return "chip--revocada";
-  if (e.includes("desiert")) return "chip--desierta";
-  return "chip--otro";
-}
-
-// Quita coletillas tipo "Desierta (o art. 3 ó 9 Ley 19.886)" y deja solo "Desierta"
-function limpiarEstado(estado) {
-  return String(estado || "").replace(/\s*\(.*?\)\s*/g, "").trim();
 }
 
 function palabrasClaveDe(fila) {
@@ -152,13 +114,9 @@ function cargarPanelTodos() {
       state.todos = filas;
       document.getElementById("todosVacio").classList.add("hidden");
       document.getElementById("todosContenido").classList.remove("hidden");
-      renderChipsEstadoTodos();
       renderStatsPorDia();
       renderListaTodos();
-      document.getElementById("buscarTodos").addEventListener("input", () => {
-        renderStatsPorDia();
-        renderListaTodos();
-      });
+      document.getElementById("buscarTodos").addEventListener("input", renderListaTodos);
     },
     () => {
       document.getElementById("todosVacio").innerHTML =
@@ -171,7 +129,6 @@ function cargarPanelFiltrados() {
   cargarExcelDesdeUrl(
     RUTA_FILTRADOS,
     (filas) => {
-      filas.forEach((f) => { f.Estado = limpiarEstado(f.Estado); });
       state.filtrados = filas;
       document.getElementById("filtradosVacio").classList.add("hidden");
       document.getElementById("filtradosContenido").classList.remove("hidden");
@@ -192,26 +149,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
 /* ---------- Panel izquierdo: todos los proyectos ---------- */
 
-function filasTodosFiltradas() {
-  const busqueda = normalizarTexto(document.getElementById("buscarTodos").value);
-  return state.todos.filter((f) => {
-    if (busqueda && !normalizarTexto(f.Nombre).includes(busqueda)) return false;
-    if (!state.estadosTodosSeleccionados.has(f.Estado)) return false;
-    return true;
-  });
-}
-
 function renderStatsPorDia() {
   const cont = document.getElementById("statsPorDia");
-  const filas = filasTodosFiltradas();
   const porDia = {};
-  filas.forEach((fila) => {
-    const fecha = formatearFechaCortaDDMMAAAA(fila.FechaConsulta) || formatearFecha(fila.FechaPublicacion);
+  state.todos.forEach((fila) => {
+    const fecha = formatearFecha(fila.FechaConsulta || fila.FechaPublicacion);
     porDia[fecha] = (porDia[fecha] || 0) + 1;
   });
 
   let html = '<div class="stat-card stat-card--total"><div class="stat-card__value">' +
-    filas.length + '</div><div class="stat-card__label">Total 5 días</div></div>';
+    state.todos.length + '</div><div class="stat-card__label">Total 5 días</div></div>';
 
   Object.keys(porDia).forEach((fecha) => {
     html += '<div class="stat-card"><div class="stat-card__value">' + porDia[fecha] +
@@ -221,54 +168,24 @@ function renderStatsPorDia() {
   cont.innerHTML = html;
 }
 
-function renderChipsEstadoTodos() {
-  const wrap = document.getElementById("chipsEstadoTodosWrap");
-  const estados = Array.from(new Set(state.todos.map((f) => f.Estado).filter(Boolean))).sort();
-
-  if (!estados.length) {
-    wrap.classList.add("hidden");
-    return;
-  }
-  wrap.classList.remove("hidden");
-
-  // Por defecto, todos los estados quedan marcados (= se listan todos los proyectos)
-  if (state.estadosTodosSeleccionados.size === 0) {
-    estados.forEach((e) => state.estadosTodosSeleccionados.add(e));
-  }
-
-  renderChips(
-    "chipsEstadoTodos",
-    estados,
-    state.estadosTodosSeleccionados,
-    (valor) => {
-      toggleSetValor(state.estadosTodosSeleccionados, valor);
-      renderStatsPorDia();
-      renderListaTodos();
-    },
-    claseChipEstado
-  );
-}
-
 function renderListaTodos() {
   const cont = document.getElementById("listaTodos");
-  const filas = filasTodosFiltradas();
+  const busqueda = normalizarTexto(document.getElementById("buscarTodos").value);
+
+  const filas = state.todos.filter((f) => !busqueda || normalizarTexto(f.Nombre).includes(busqueda));
 
   if (!filas.length) {
-    cont.innerHTML = '<div class="list-empty">No hay proyectos que coincidan con la búsqueda o los filtros.</div>';
+    cont.innerHTML = '<div class="list-empty">No hay proyectos que coincidan con la búsqueda.</div>';
     return;
   }
 
   cont.innerHTML = filas
     .map((f) => {
-      const fecha = formatearFechaDDMMAAAA(f.FechaConsulta) || formatearFecha(f.FechaPublicacion);
-      const estadoHtml = f.Estado
-        ? '<span class="estado-badge ' + claseEstado(f.Estado) + '">' + escapeHtml(f.Estado) + '</span>'
-        : "";
+      const fecha = formatearFecha(f.FechaConsulta || f.FechaPublicacion);
       return (
         '<div class="list-item">' +
         '<div class="list-item__nombre">' + escapeHtml(f.Nombre) + '</div>' +
         '<div class="list-item__meta">' +
-        estadoHtml +
         '<span class="day-badge">' + escapeHtml(fecha) + '</span>' +
         '<span class="list-item__fecha">Cierre: ' + formatearFecha(f.FechaCierre) + '</span>' +
         '</div>' +
@@ -281,12 +198,6 @@ function renderListaTodos() {
 /* ---------- Panel derecho: filtros y resultados ---------- */
 
 function inicializarFiltros() {
-  // Por defecto, todas las opciones quedan marcadas (= no se aplica ningun filtro,
-  // se muestran todos los proyectos). Solo la primera vez que se conocen los valores.
-  if (state.filtros.palabrasClave.size === 0) {
-    KEYWORDS_DASHBOARD.forEach((k) => state.filtros.palabrasClave.add(k));
-  }
-
   renderChips(
     "chipsPalabraClave",
     KEYWORDS_DASHBOARD,
@@ -298,28 +209,16 @@ function inicializarFiltros() {
   );
 
   const regiones = Array.from(new Set(state.filtrados.map((f) => f.Region).filter(Boolean))).sort();
-  if (state.filtros.regiones.size === 0) {
-    regiones.forEach((r) => state.filtros.regiones.add(r));
-  }
   renderChips("chipsRegion", regiones, state.filtros.regiones, (valor) => {
     toggleSetValor(state.filtros.regiones, valor);
     aplicarFiltrosYRenderizar();
   });
 
   const estados = Array.from(new Set(state.filtrados.map((f) => f.Estado).filter(Boolean))).sort();
-  if (state.filtros.estados.size === 0) {
-    estados.forEach((e) => state.filtros.estados.add(e));
-  }
-  renderChips(
-    "chipsEstado",
-    estados,
-    state.filtros.estados,
-    (valor) => {
-      toggleSetValor(state.filtros.estados, valor);
-      aplicarFiltrosYRenderizar();
-    },
-    claseChipEstado
-  );
+  renderChips("chipsEstado", estados, state.filtros.estados, (valor) => {
+    toggleSetValor(state.filtros.estados, valor);
+    aplicarFiltrosYRenderizar();
+  });
 
   document.getElementById("montoMin").addEventListener("input", (e) => {
     state.filtros.montoMin = e.target.value ? Number(e.target.value) : null;
@@ -334,40 +233,16 @@ function inicializarFiltros() {
     aplicarFiltrosYRenderizar();
   });
   document.getElementById("resetFiltros").addEventListener("click", () => {
-    // "Limpiar filtros" = volver al estado inicial: todo marcado, se ve todo
-    KEYWORDS_DASHBOARD.forEach((k) => state.filtros.palabrasClave.add(k));
-    Array.from(new Set(state.filtrados.map((f) => f.Region).filter(Boolean))).forEach((r) =>
-      state.filtros.regiones.add(r)
-    );
-    Array.from(new Set(state.filtrados.map((f) => f.Estado).filter(Boolean))).forEach((e) =>
-      state.filtros.estados.add(e)
-    );
+    state.filtros.palabrasClave.clear();
+    state.filtros.regiones.clear();
+    state.filtros.estados.clear();
     state.filtros.montoMin = null;
     state.filtros.montoMax = null;
     state.filtros.incluirSinMonto = true;
     document.getElementById("montoMin").value = "";
     document.getElementById("montoMax").value = "";
     document.getElementById("incluirSinMonto").checked = true;
-    renderChips("chipsPalabraClave", KEYWORDS_DASHBOARD, state.filtros.palabrasClave, (valor) => {
-      toggleSetValor(state.filtros.palabrasClave, valor);
-      aplicarFiltrosYRenderizar();
-    });
-    const regiones = Array.from(new Set(state.filtrados.map((f) => f.Region).filter(Boolean))).sort();
-    renderChips("chipsRegion", regiones, state.filtros.regiones, (valor) => {
-      toggleSetValor(state.filtros.regiones, valor);
-      aplicarFiltrosYRenderizar();
-    });
-    const estados = Array.from(new Set(state.filtrados.map((f) => f.Estado).filter(Boolean))).sort();
-    renderChips(
-      "chipsEstado",
-      estados,
-      state.filtros.estados,
-      (valor) => {
-        toggleSetValor(state.filtros.estados, valor);
-        aplicarFiltrosYRenderizar();
-      },
-      claseChipEstado
-    );
+    inicializarFiltros();
     aplicarFiltrosYRenderizar();
   });
 }
@@ -377,13 +252,12 @@ function toggleSetValor(set, valor) {
   else set.add(valor);
 }
 
-function renderChips(contenedorId, valores, seleccionados, onClick, claseFn) {
+function renderChips(contenedorId, valores, seleccionados, onClick) {
   const cont = document.getElementById(contenedorId);
   cont.innerHTML = valores
     .map((v) => {
       const activo = seleccionados.has(v) ? " is-active" : "";
-      const colorClase = claseFn ? " " + claseFn(v) : "";
-      return '<span class="chip' + colorClase + activo + '" data-valor="' + escapeHtml(v) + '">' + escapeHtml(v) + "</span>";
+      return '<span class="chip' + activo + '" data-valor="' + escapeHtml(v) + '">' + escapeHtml(v) + "</span>";
     })
     .join("");
 
@@ -398,12 +272,14 @@ function renderChips(contenedorId, valores, seleccionados, onClick, claseFn) {
 function proyectoPasaFiltros(fila) {
   const f = state.filtros;
 
-  const kws = palabrasClaveDe(fila);
-  const coincidePalabraClave = kws.length === 0 || kws.some((k) => f.palabrasClave.has(k));
-  if (!coincidePalabraClave) return false;
+  if (f.palabrasClave.size > 0) {
+    const kws = palabrasClaveDe(fila);
+    const coincide = kws.some((k) => f.palabrasClave.has(k));
+    if (!coincide) return false;
+  }
 
-  if (!f.regiones.has(fila.Region)) return false;
-  if (!f.estados.has(fila.Estado)) return false;
+  if (f.regiones.size > 0 && !f.regiones.has(fila.Region)) return false;
+  if (f.estados.size > 0 && !f.estados.has(fila.Estado)) return false;
 
   const monto = Number(fila.MontoEstimado);
   const sinMonto = !fila.MontoEstimado || isNaN(monto) || monto <= 0;
@@ -424,26 +300,54 @@ function aplicarFiltrosYRenderizar() {
   renderListaFiltrados(resultados);
 }
 
+function contarPor(filas, campo) {
+  const conteo = {};
+  filas.forEach((f) => {
+    const valor = f[campo] || "Sin dato";
+    conteo[valor] = (conteo[valor] || 0) + 1;
+  });
+  return Object.entries(conteo).sort((a, b) => b[1] - a[1]);
+}
+
+function tarjetaDesglose(titulo, filas, campo) {
+  const conteo = contarPor(filas, campo);
+  const max = conteo.length ? conteo[0][1] : 1;
+  const filasHtml = conteo
+    .slice(0, 6)
+    .map(
+      ([label, count]) =>
+        '<div class="bar-row">' +
+        '<div class="bar-row__label">' + escapeHtml(label) + '</div>' +
+        '<div class="bar-row__track"><div class="bar-row__fill" style="width:' +
+        Math.round((count / max) * 100) +
+        '%"></div></div>' +
+        '<div class="bar-row__count">' + count + '</div>' +
+        "</div>"
+    )
+    .join("");
+
+  return (
+    '<div class="agg-card agg-card--breakdown"><div class="agg-card__label">' +
+    escapeHtml(titulo) +
+    "</div>" +
+    filasHtml +
+    "</div>"
+  );
+}
+
 function renderAggStats(filas) {
   const cont = document.getElementById("aggStats");
-
-  const conMonto = filas.filter((f) => {
+  const montoTotal = filas.reduce((acc, f) => {
     const m = Number(f.MontoEstimado);
-    return f.MontoEstimado && !isNaN(m) && m > 0;
-  });
-  const sinMonto = filas.length - conMonto.length;
-  const montoTotal = conMonto.reduce((acc, f) => acc + Number(f.MontoEstimado), 0);
+    return acc + (isNaN(m) ? 0 : m);
+  }, 0);
 
-  const html =
-    '<div class="stat-card stat-card--total"><div class="stat-card__value">' + filas.length +
-    '</div><div class="stat-card__label">Proyectos totales</div></div>' +
+  let html =
+    '<div class="agg-card"><div class="agg-card__value">' + filas.length + '</div><div class="agg-card__label">Proyectos filtrados</div></div>' +
+    '<div class="agg-card"><div class="agg-card__value">' + formatearMonto(montoTotal) + '</div><div class="agg-card__label">Monto total estimado</div></div>';
 
-    '<div class="stat-card"><div class="stat-card__value">' + conMonto.length +
-    '</div><div class="stat-card__label">Con monto informado</div>' +
-    '<div class="stat-card__sub">' + formatearMonto(montoTotal) + '</div></div>' +
-
-    '<div class="stat-card"><div class="stat-card__value">' + sinMonto +
-    '</div><div class="stat-card__label">Sin monto informado</div></div>';
+  html += tarjetaDesglose("Por región", filas, "Region");
+  html += tarjetaDesglose("Por estado", filas, "Estado");
 
   cont.innerHTML = html;
 }
@@ -457,7 +361,7 @@ function renderListaFiltrados(filas) {
   }
 
   cont.innerHTML = filas
-    .map((f) => {
+    .map((f, idx) => {
       const kws = palabrasClaveDe(f);
       const kwsHtml = kws.length
         ? '<div class="result-card__keywords">' +
@@ -466,7 +370,8 @@ function renderListaFiltrados(filas) {
         : "";
 
       return (
-        '<div class="result-card">' +
+        '<div class="result-card" data-idx="' + idx + '" tabindex="0" role="button" ' +
+        'aria-label="Ver ficha completa de ' + escapeHtml(f.Nombre) + '">' +
         '<div class="result-card__top">' +
         '<div class="result-card__nombre">' + escapeHtml(f.Nombre) + '</div>' +
         '<span class="estado-badge ' + claseEstado(f.Estado) + '">' + escapeHtml(f.Estado) + '</span>' +
@@ -482,4 +387,16 @@ function renderListaFiltrados(filas) {
       );
     })
     .join("");
+
+  // Al hacer clic se delega por completo en el modulo "ficha" (ver ficha.js).
+  cont.querySelectorAll(".result-card").forEach((card) => {
+    const abrir = () => Ficha.abrir(filas[Number(card.dataset.idx)]);
+    card.addEventListener("click", abrir);
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        abrir();
+      }
+    });
+  });
 }
