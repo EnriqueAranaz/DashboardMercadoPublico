@@ -278,7 +278,17 @@ function renderListaTodos() {
 
 /* ---------- Panel derecho: filtros y resultados ---------- */
 
+// Si un set de filtro llega vacio (primera carga, o justo despues de "Limpiar
+// filtros"), se rellena con todos los valores disponibles: por convencion,
+// todos los filtros arrancan con TODO marcado (= sin exclusiones).
+function marcarTodosPorDefecto(set, valores) {
+  if (set.size === 0) {
+    valores.forEach((v) => set.add(v));
+  }
+}
+
 function inicializarFiltros() {
+  marcarTodosPorDefecto(state.filtros.palabrasClave, KEYWORDS_DASHBOARD);
   renderChips(
     "chipsPalabraClave",
     KEYWORDS_DASHBOARD,
@@ -290,12 +300,14 @@ function inicializarFiltros() {
   );
 
   const regiones = Array.from(new Set(state.filtrados.map((f) => f.Region).filter(Boolean))).sort();
+  marcarTodosPorDefecto(state.filtros.regiones, regiones);
   renderChips("chipsRegion", regiones, state.filtros.regiones, (valor) => {
     toggleSetValor(state.filtros.regiones, valor);
     aplicarFiltrosYRenderizar();
   });
 
   const estados = Array.from(new Set(state.filtrados.map((f) => f.Estado).filter(Boolean))).sort();
+  marcarTodosPorDefecto(state.filtros.estados, estados);
   renderChips(
     "chipsEstado",
     estados,
