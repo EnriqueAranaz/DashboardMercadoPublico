@@ -106,6 +106,11 @@ function claseChipEstado(estado) {
   return "chip--otro";
 }
 
+// Quita coletillas tipo "Desierta (o art. 3 ó 9 Ley 19.886)" y deja solo "Desierta"
+function limpiarEstado(estado) {
+  return String(estado || "").replace(/\s*\(.*?\)\s*/g, "").trim();
+}
+
 function palabrasClaveDe(fila) {
   if (fila.PalabrasClave) {
     return String(fila.PalabrasClave)
@@ -166,6 +171,7 @@ function cargarPanelFiltrados() {
   cargarExcelDesdeUrl(
     RUTA_FILTRADOS,
     (filas) => {
+      filas.forEach((f) => { f.Estado = limpiarEstado(f.Estado); });
       state.filtrados = filas;
       document.getElementById("filtradosVacio").classList.add("hidden");
       document.getElementById("filtradosContenido").classList.remove("hidden");
@@ -275,6 +281,12 @@ function renderListaTodos() {
 /* ---------- Panel derecho: filtros y resultados ---------- */
 
 function inicializarFiltros() {
+  // Por defecto, todas las opciones quedan marcadas (= no se aplica ningun filtro,
+  // se muestran todos los proyectos). Solo la primera vez que se conocen los valores.
+  if (state.filtros.palabrasClave.size === 0) {
+    KEYWORDS_DASHBOARD.forEach((k) => state.filtros.palabrasClave.add(k));
+  }
+
   renderChips(
     "chipsPalabraClave",
     KEYWORDS_DASHBOARD,
@@ -286,12 +298,18 @@ function inicializarFiltros() {
   );
 
   const regiones = Array.from(new Set(state.filtrados.map((f) => f.Region).filter(Boolean))).sort();
+  if (state.filtros.regiones.size === 0) {
+    regiones.forEach((r) => state.filtros.regiones.add(r));
+  }
   renderChips("chipsRegion", regiones, state.filtros.regiones, (valor) => {
     toggleSetValor(state.filtros.regiones, valor);
     aplicarFiltrosYRenderizar();
   });
 
   const estados = Array.from(new Set(state.filtrados.map((f) => f.Estado).filter(Boolean))).sort();
+  if (state.filtros.estados.size === 0) {
+    estados.forEach((e) => state.filtros.estados.add(e));
+  }
   renderChips(
     "chipsEstado",
     estados,
@@ -316,16 +334,40 @@ function inicializarFiltros() {
     aplicarFiltrosYRenderizar();
   });
   document.getElementById("resetFiltros").addEventListener("click", () => {
-    state.filtros.palabrasClave.clear();
-    state.filtros.regiones.clear();
-    state.filtros.estados.clear();
+    // "Limpiar filtros" = volver al estado inicial: todo marcado, se ve todo
+    KEYWORDS_DASHBOARD.forEach((k) => state.filtros.palabrasClave.add(k));
+    Array.from(new Set(state.filtrados.map((f) => f.Region).filter(Boolean))).forEach((r) =>
+      state.filtros.regiones.add(r)
+    );
+    Array.from(new Set(state.filtrados.map((f) => f.Estado).filter(Boolean))).forEach((e) =>
+      state.filtros.estados.add(e)
+    );
     state.filtros.montoMin = null;
     state.filtros.montoMax = null;
     state.filtros.incluirSinMonto = true;
     document.getElementById("montoMin").value = "";
     document.getElementById("montoMax").value = "";
     document.getElementById("incluirSinMonto").checked = true;
-    inicializarFiltros();
+    renderChips("chipsPalabraClave", KEYWORDS_DASHBOARD, state.filtros.palabrasClave, (valor) => {
+      toggleSetValor(state.filtros.palabrasClave, valor);
+      aplicarFiltrosYRenderizar();
+    });
+    const regiones = Array.from(new Set(state.filtrados.map((f) => f.Region).filter(Boolean))).sort();
+    renderChips("chipsRegion", regiones, state.filtros.regiones, (valor) => {
+      toggleSetValor(state.filtros.regiones, valor);
+      aplicarFiltrosYRenderizar();
+    });
+    const estados = Array.from(new Set(state.filtrados.map((f) => f.Estado).filter(Boolean))).sort();
+    renderChips(
+      "chipsEstado",
+      estados,
+      state.filtros.estados,
+      (valor) => {
+        toggleSetValor(state.filtros.estados, valor);
+        aplicarFiltrosYRenderizar();
+      },
+      claseChipEstado
+    );
     aplicarFiltrosYRenderizar();
   });
 }
@@ -356,14 +398,12 @@ function renderChips(contenedorId, valores, seleccionados, onClick, claseFn) {
 function proyectoPasaFiltros(fila) {
   const f = state.filtros;
 
-  if (f.palabrasClave.size > 0) {
-    const kws = palabrasClaveDe(fila);
-    const coincide = kws.some((k) => f.palabrasClave.has(k));
-    if (!coincide) return false;
-  }
+  const kws = palabrasClaveDe(fila);
+  const coincidePalabraClave = kws.length === 0 || kws.some((k) => f.palabrasClave.has(k));
+  if (!coincidePalabraClave) return false;
 
-  if (f.regiones.size > 0 && !f.regiones.has(fila.Region)) return false;
-  if (f.estados.size > 0 && !f.estados.has(fila.Estado)) return false;
+  if (!f.regiones.has(fila.Region)) return false;
+  if (!f.estados.has(fila.Estado)) return false;
 
   const monto = Number(fila.MontoEstimado);
   const sinMonto = !fila.MontoEstimado || isNaN(monto) || monto <= 0;
