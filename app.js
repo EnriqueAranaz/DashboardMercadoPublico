@@ -12,6 +12,20 @@
 
 const KEYWORDS_DASHBOARD = ["jardin", "jardines", "area verde", "areas verdes", "paisajismo"];
 
+// Mismos criterios y pesos que celda_score_oportunidades.py (notebook). Si
+// cambian los pesos alla, hay que actualizarlos aca tambien para que el
+// tooltip siga explicando el score real. `campo` es la columna del excel
+// con el sub-score (0-100) de ese criterio para la fila.
+const CRITERIOS_SCORE = [
+  { label: "Monto estimado", peso: 25, campo: "ScoreMonto" },
+  { label: "Tipo de licitación", peso: 15, campo: "ScoreTipo" },
+  { label: "Región", peso: 15, campo: "ScoreRegion" },
+  { label: "Enfoque (palabra clave)", peso: 15, campo: "ScoreEnfoque" },
+  { label: "Reclamos del organismo", peso: 15, campo: "ScoreReclamos" },
+  { label: "Plazo para preparar oferta", peso: 10, campo: "ScorePlazo" },
+  { label: "Permite subcontratación", peso: 5, campo: "ScoreSubcontratacion" },
+];
+
 const state = {
   todos: [],        // filas del excel "todos los proyectos"
   filtrados: [],     // filas del excel "proyectos filtrados"
@@ -424,6 +438,50 @@ function renderAggStats(filas) {
   cont.innerHTML = html;
 }
 
+// El excel trae "" (no NaN) en las filas sin score (historial no accionable,
+// ver celda_score_oportunidades.py). Number("") es 0, por eso hay que
+// chequear explicitamente si el valor esta vacio antes de tratarlo como numero.
+function tieneScore(valor) {
+  return !(valor === null || valor === undefined || String(valor).trim() === "");
+}
+
+function formatearScore(valor) {
+  const n = Number(valor);
+  return Number.isFinite(n) ? (Math.round(n * 10) / 10).toString() : "—";
+}
+
+function scoreTooltipHtml(f) {
+  const filasHtml = CRITERIOS_SCORE.map((c) => {
+    const sub = tieneScore(f[c.campo]) ? formatearScore(f[c.campo]) : "—";
+    return (
+      '<div class="score-tooltip__row">' +
+      '<span class="score-tooltip__criterio">' + escapeHtml(c.label) + ' <em>(' + c.peso + '%)</em></span>' +
+      '<span class="score-tooltip__valor">' + sub + '</span>' +
+      "</div>"
+    );
+  }).join("");
+
+  return (
+    '<div class="score-tooltip" role="tooltip">' +
+    '<div class="score-tooltip__titulo">Score final: ' + formatearScore(f.Score) + ' / 100</div>' +
+    '<div class="score-tooltip__subtitulo">Cómo se calcula (criterio, peso y puntaje 0-100 de este proyecto):</div>' +
+    filasHtml +
+    "</div>"
+  );
+}
+
+function scoreBadgeHtml(f) {
+  if (!tieneScore(f.Score)) return "";
+  return (
+    '<span class="score-wrap">' +
+    '<span class="score-badge" tabindex="0" aria-label="Score de priorización: ' + formatearScore(f.Score) + ' sobre 100. Pasa el mouse para ver el detalle.">' +
+    "Score " + formatearScore(f.Score) +
+    "</span>" +
+    scoreTooltipHtml(f) +
+    "</span>"
+  );
+}
+
 function renderListaFiltrados(filas) {
   const cont = document.getElementById("listaFiltrados");
 
@@ -432,7 +490,20 @@ function renderListaFiltrados(filas) {
     return;
   }
 
-  cont.innerHTML = filas
+  // Rankeado por Score descendente; las filas sin score (historial no
+  // accionable: Cerrada/Adjudicada/Desierta/Revocada) quedan al final,
+  // en el orden en que ya venian.
+  const filasRankeadas = filas
+    .map((f, i) => ({ f, i }))
+    .sort((a, b) => {
+      const sa = tieneScore(a.f.Score) ? Number(a.f.Score) : -Infinity;
+      const sb = tieneScore(b.f.Score) ? Number(b.f.Score) : -Infinity;
+      if (sb !== sa) return sb - sa;
+      return a.i - b.i; // empate: se respeta el orden original (orden estable)
+    })
+    .map((x) => x.f);
+
+  cont.innerHTML = filasRankeadas
     .map((f, idx) => {
       const kws = palabrasClaveDe(f);
       const kwsHtml = kws.length
@@ -446,7 +517,10 @@ function renderListaFiltrados(filas) {
         'aria-label="Ver ficha completa de ' + escapeHtml(f.Nombre) + '">' +
         '<div class="result-card__top">' +
         '<div class="result-card__nombre">' + escapeHtml(f.Nombre) + '</div>' +
+        '<div class="result-card__badges">' +
+        scoreBadgeHtml(f) +
         '<span class="estado-badge ' + claseEstado(f.Estado) + '">' + escapeHtml(f.Estado) + '</span>' +
+        "</div>" +
         "</div>" +
         '<div class="result-card__meta">' +
         '<span><strong>Organismo:</strong> ' + escapeHtml(f.Organismo || "—") + '</span>' +
@@ -461,11 +535,16 @@ function renderListaFiltrados(filas) {
     .join("");
 
   // Al hacer clic se delega por completo en el modulo "ficha" (ver ficha.js).
+  // Se ignoran los clics que empiezan en el badge de score (para poder
+  // seleccionar/leer el tooltip sin abrir la ficha sin querer).
   cont.querySelectorAll(".result-card").forEach((card) => {
-    const abrir = () => Ficha.abrir(filas[Number(card.dataset.idx)]);
-    card.addEventListener("click", abrir);
+    const abrir = () => Ficha.abrir(filasRankeadas[Number(card.dataset.idx)]);
+    card.addEventListener("click", (e) => {
+      if (e.target.closest(".score-wrap")) return;
+      abrir();
+    });
     card.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
+      if ((e.key === "Enter" || e.key === " ") && !e.target.closest(".score-wrap")) {
         e.preventDefault();
         abrir();
       }
